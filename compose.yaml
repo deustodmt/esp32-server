@@ -1,0 +1,7 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "2000:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
