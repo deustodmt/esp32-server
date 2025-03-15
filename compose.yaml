@@ -5,3 +5,15 @@ services:
       - "2000:1883"
     volumes:
       - ./mosquitto/config:/mosquitto/config
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 1883 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+  
+  esp32-server:
+    build: ./server
+    depends_on:
+      mosquitto:
+        condition: service_healthy
