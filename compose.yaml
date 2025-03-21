@@ -21,18 +21,17 @@ services:
         condition: service_healthy
   
   db:
-    image: postgres:latest
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: esp32
+    image: mongo:latest
     ports:
-      - "5432:5432"
+      - "27017:27017"
+    volumes:
+      - ./db/data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 5s
-    volumes:
-      - ./db/data:/var/lib/postgresql/data
