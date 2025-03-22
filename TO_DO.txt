@@ -5,7 +5,7 @@ Planificación:
     - Configurar mosquitto para que escuche a la interfaz de wlan
 
 2. Diseño de la base de datos
-    - Setup de PostgreSQL
+    - Setup de InfluxDB
     - Asegurar la persistencia
     - Diseño de la estructura de la base de datos (tablas y campos), hacer documentación
     

@@ -6,7 +6,7 @@ services:
     volumes:
       - ./mosquitto/config:/mosquitto/config
     healthcheck:
-      test: ["CMD", "sh", "-c", "nc -z localhost 1883 || exit 1"]
+      test: ["CMD", "sh", "-c", "nc -z 0.0.0.0 1883 || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -21,17 +21,21 @@ services:
         condition: service_healthy
   
   db:
-    image: mongo:latest
+    image: influxdb:latest
     ports:
-      - "27017:27017"
+      - "8086:8086"
     volumes:
-      - ./db/data:/data/db
+      - ./db/data:/var/lib/influxdb2
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=admin
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
+      - DOCKER_INFLUXDB_INIT_ORG=myorg
+      - DOCKER_INFLUXDB_INIT_BUCKET=mybucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mytoken
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8086/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s

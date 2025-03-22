@@ -1,5 +1,6 @@
 import sys
 
+from db_manager import *
 import paho.mqtt.client as paho
 import threading
 import time
@@ -23,7 +24,11 @@ def message_handling(client, userdata, msg):
 
 # Create a new thread to test the client
 hilo = threading.Thread(target=testClient)
-hilo.start()
+#hilo.start()
+
+#DB TEST
+db = DBManager("mybucket")
+db.writeTest()
 
 # Subscriber listening to the connections
 client = paho.Client(protocol=paho.MQTTv5)
