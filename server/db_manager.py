@@ -4,8 +4,8 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 class DBManager:
     def __init__(self, bucket):
         self.bucket = bucket
-        self.org = os.getenv("INFLUXDB_ORG", "myorg")
-        self.token = os.getenv("INFLUXDB_TOKEN", "mytoken")
+        self.org = os.getenv("INFLUXDB_ORG", "deusto")
+        self.token = os.getenv("INFLUXDB_TOKEN", "udmt_super_secure_token")
         self.url = os.getenv("INFLUXDB_URL", "http://db:8086")
 
         try:

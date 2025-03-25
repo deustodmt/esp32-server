@@ -27,7 +27,7 @@ hilo = threading.Thread(target=testClient)
 #hilo.start()
 
 #DB TEST
-db = DBManager("mybucket")
+db = DBManager("udmt")
 db.writeTest()
 
 # Subscriber listening to the connections
