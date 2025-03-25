@@ -60,6 +60,11 @@ Measurement: ECU
 ## 🔍 Recursos para la extracción de datos
 - **ECU**: [Protocolo CAN de Kelly Controller](https://media.kellycontroller.com/new/Sinusoidal-Wave-Controller-KLS-D-8080I-8080IPS-Broadcast-CAN-Protocol.pdf)
 - **BMS**: [Protocolo CAN de Daly](https://robu.in/wp-content/uploads/2021/10/Daly-CAN-Communications-Protocol-V1.0-1.pdf)
+- **Ejemplo trama ECU:**
+```plaintext
+2B 41 33 00 01 20 00 00
+05 00 00 00 C3 01 00 00
+```
 
 ---
 
