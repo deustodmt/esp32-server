@@ -5,6 +5,8 @@ import paho.mqtt.client as paho
 import threading
 import time
 
+db = DBManager("udmt")
+
 def testClient():
     time.sleep(2)
     for i in range(10):
@@ -21,14 +23,18 @@ def testClient():
 
 def message_handling(client, userdata, msg):
     print(f"{msg.topic}: {msg.payload.decode()}")
+    db.saveCANData(msg.payload)
 
 # Create a new thread to test the client
 hilo = threading.Thread(target=testClient)
-#hilo.start()
+hilo.start()
 
 #DB TEST
-db = DBManager("udmt")
 db.writeTest()
+#data=b'\x0C\xF1\x1E\x05\xCF\x11\xE0\x5C\xF1\x1E\x05\xCF\x11\xE0\x5C\x05'
+#print("data: ", data)
+#db.saveCANData(data)
+#print("Data saved")
 
 # Subscriber listening to the connections
 client = paho.Client(protocol=paho.MQTTv5)

@@ -1,1 +1,4 @@
 db/data
+*.cfg
+bin
+lib*
