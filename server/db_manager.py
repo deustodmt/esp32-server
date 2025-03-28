@@ -1,3 +1,4 @@
+import struct
 import influxdb_client, os
 from influxdb_client.client.write_api import SYNCHRONOUS
 
@@ -28,7 +29,7 @@ class DBManager:
             return
         
     
-    def writePoint(self, measurement:str, **kwargs):
+    def writePoint(self, measurement:str, timestamp:int = None,**kwargs):
         """
         Writes a point to the InfluxDB database
         The format is as follows:
@@ -38,6 +39,13 @@ class DBManager:
         """
         try:
             p = influxdb_client.Point(measurement)
+
+            # MotoStudent Bike Signature
+            p.tag("Moto", "moto_student_2025")
+
+            if timestamp is not None:                      #TODO Ensure the time format is correct
+                p.time(timestamp, write_precision="ns")
+
             for key in kwargs:
                 if key.startswith("tag_"):
                     p.tag(key[4:], kwargs[key])
@@ -50,33 +58,48 @@ class DBManager:
             print(f"Error al crear el punto: {e}")
             return False
         
-    def saveCANData(self, data:str):
+    def saveCANData(self, data):
         """
         Decodifies the CAN data and saves it to the database
-        Format of the data (16 bytes):
+        Format of the data (20 bytes):
         0-3: ID
-        4-7: Timestamp
-        8-15: Data
+        4-11: Timestamp
+        12-19: Data
         """
-        if(len(data) != 16):
-            print("Error: La longitud de los datos no es correcta")
-            return False
+
+        if isinstance(data, str):
+            try:
+                data = bytes.fromhex(data)
+            except ValueError:
+                print("Error: Invalid hex string")
+                return False
         
+        if len(data) != 20:
+            print(f"Error: Invalid data length ({len(data)} bytes). Expected 20 bytes.")
+            return False
+
         try:
-            if(data[0:3] == ECU_ID_MSG1.to_bytes(4, byteorder='big')[0:3]):
-                self.writePoint("ECU", 
-                                RPM=1, 
-                                tag_ID=1, 
-                                #timestamp=int.from_bytes(data[4:7], "big"), 
-                                #data=int.from_bytes(data[8:15], "big")
+            ID = struct.unpack(">I", data[0:4])[0]
+            timestamp = struct.unpack(">Q", data[4:12])[0]
+            segmentData = []    # List of payload bytes like in the documentation [1, 2, 3, 4, 5, 6, 7, 8]
+
+            for i in range(12, 20):
+                segmentData.append(struct.unpack(">B", data[i:i+1])[0])
+
+            if(ID == ECU_ID_MSG1):
+                self.writePoint("ECU",
+                                RPM=segmentData[1]*256+segmentData[0], 
+                                Current=(segmentData[3]*256+segmentData[2])/10,
+                                Voltage=(segmentData[5]*256+segmentData[4])/10,
+                                tag_ErrorCode=data[18:20].hex().upper()
                                 )
                 print("Datos guardados correctamente")
-            elif(data[0:3] == ECU_ID_MSG2):
-                self.writePoint("ECU", 
-                                tag_ECU="2", 
-                                tag_ID="2", 
-                                timestamp=int.from_bytes(data[4:7], "big"), 
-                                data=int.from_bytes(data[8:15], "big"))
+            elif(ID == ECU_ID_MSG2):
+                # self.writePoint("ECU", 
+                #                 tag_ECU="2", 
+                #                 tag_ID="2", 
+                #                 timestamp=int.from_bytes(data[4:7], "big"), 
+                #                 data=int.from_bytes(data[7:15], "big"))
                 print("Datos guardados correctamente 2")
             else:
                 print("Error: ID incorrecto")

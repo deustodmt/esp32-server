@@ -23,7 +23,7 @@ def testClient():
 
 def message_handling(client, userdata, msg):
     print(f"{msg.topic}: {msg.payload.decode()}")
-    db.saveCANData(msg.payload)
+    #db.saveCANData(msg.payload)
 
 # Create a new thread to test the client
 #hilo = threading.Thread(target=testClient)
@@ -31,7 +31,7 @@ def message_handling(client, userdata, msg):
 
 #DB TEST
 #db.writeTest()
-data=bytes.fromhex("0CF11E050CF11E050CF11E050CF11E05")
+data=bytes.fromhex("0CF11E050000123456789ABC05000000C3010000")
 print("data: ", data)
 db.saveCANData(data)
 print("Data saved")
