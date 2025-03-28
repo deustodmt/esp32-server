@@ -26,15 +26,15 @@ def message_handling(client, userdata, msg):
     db.saveCANData(msg.payload)
 
 # Create a new thread to test the client
-hilo = threading.Thread(target=testClient)
-hilo.start()
+#hilo = threading.Thread(target=testClient)
+#hilo.start()
 
 #DB TEST
-db.writeTest()
-#data=b'\x0C\xF1\x1E\x05\xCF\x11\xE0\x5C\xF1\x1E\x05\xCF\x11\xE0\x5C\x05'
-#print("data: ", data)
-#db.saveCANData(data)
-#print("Data saved")
+#db.writeTest()
+data=bytes.fromhex("0CF11E050CF11E050CF11E050CF11E05")
+print("data: ", data)
+db.saveCANData(data)
+print("Data saved")
 
 # Subscriber listening to the connections
 client = paho.Client(protocol=paho.MQTTv5)

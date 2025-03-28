@@ -10,7 +10,7 @@ class DBManager:
         self.org = os.getenv("INFLUXDB_ORG", "deusto")
         self.token = os.getenv("INFLUXDB_TOKEN", "udmt_super_secure_token")
         self.url = os.getenv("INFLUXDB_URL", "http://db:8086")
-
+        print(ECU_ID_MSG1.to_bytes(4, byteorder='big')[0:3])
         try:
             self.client = influxdb_client.InfluxDBClient(url=self.url, token=self.token, org=self.org)
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
@@ -63,12 +63,13 @@ class DBManager:
             return False
         
         try:
-            if(data[0:3] == ECU_ID_MSG1):
+            if(data[0:3] == ECU_ID_MSG1.to_bytes(4, byteorder='big')[0:3]):
                 self.writePoint("ECU", 
-                                RPM="1", 
-                                tag_ID="1", 
-                                timestamp=int.from_bytes(data[4:7], "big"), 
-                                data=int.from_bytes(data[8:15], "big"))
+                                RPM=1, 
+                                tag_ID=1, 
+                                #timestamp=int.from_bytes(data[4:7], "big"), 
+                                #data=int.from_bytes(data[8:15], "big")
+                                )
                 print("Datos guardados correctamente")
             elif(data[0:3] == ECU_ID_MSG2):
                 self.writePoint("ECU", 
