@@ -30,11 +30,15 @@ def message_handling(client, userdata, msg):
 #hilo.start()
 
 #DB TEST
-#db.writeTest()
-data=bytes.fromhex("0CF11E050000123456789ABC05000000C3010000")
-print("data: ", data)
+#Message 1 ECU         ID           TIMESTAMP           PAYLOAD
+data=bytes.fromhex("0CF11E05"+"00000195e0fdc5ee"+"05000000C3010000")
 db.saveCANData(data)
-print("Data saved")
+
+
+#Message 2 ECU         ID           TIMESTAMP           PAYLOAD
+data=bytes.fromhex("0CF11F05"+"00000195e2c8c5ee"+"2B41330001200000")
+db.saveCANData(data)
+
 
 # Subscriber listening to the connections
 client = paho.Client(protocol=paho.MQTTv5)

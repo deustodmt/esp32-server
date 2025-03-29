@@ -44,7 +44,7 @@ class DBManager:
             p.tag("Moto", "moto_student_2025")
 
             if timestamp is not None:                      #TODO Ensure the time format is correct
-                p.time(timestamp, write_precision="ns")
+                p.time(timestamp, write_precision="ms")
 
             for key in kwargs:
                 if key.startswith("tag_"):
@@ -88,6 +88,7 @@ class DBManager:
 
             if(ID == ECU_ID_MSG1):
                 self.writePoint("ECU",
+                                timestamp,
                                 RPM=segmentData[1]*256+segmentData[0], 
                                 Current=(segmentData[3]*256+segmentData[2])/10,
                                 Voltage=(segmentData[5]*256+segmentData[4])/10,
@@ -95,11 +96,14 @@ class DBManager:
                                 )
                 print("Datos guardados correctamente")
             elif(ID == ECU_ID_MSG2):
-                # self.writePoint("ECU", 
-                #                 tag_ECU="2", 
-                #                 tag_ID="2", 
-                #                 timestamp=int.from_bytes(data[4:7], "big"), 
-                #                 data=int.from_bytes(data[7:15], "big"))
+                self.writePoint("ECU", 
+                                timestamp,
+                                Threottle=segmentData[0],
+                                ControllerTemp=segmentData[1] - 40,
+                                MotorTemp=segmentData[2] - 30,
+                                StatusController=segmentData[4],
+                                SwitchSignals=segmentData[5],
+                                )
                 print("Datos guardados correctamente 2")
             else:
                 print("Error: ID incorrecto")
@@ -107,6 +111,6 @@ class DBManager:
             return True
         
         except Exception as e:
-            print(f"Error al guardar los datos en la base de datos: {e}")
+            print(f"Error al guardar los datos en la base de datos: {e}\nEl formato de data es: {data}")
             return False
 
