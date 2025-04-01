@@ -43,7 +43,11 @@ class DBManager:
             # MotoStudent Bike Signature
             p.tag("Moto", "moto_student_2025")
 
-            if timestamp is not None:                      #TODO Ensure the time format is correct
+            if timestamp is not None:
+                # if(len(timestamp) != 8 ):
+                #     print(f"Error, timestamp format is not 8 byte: {timestamp}")
+                #     return False
+                # else:
                 p.time(timestamp, write_precision="ms")
 
             for key in kwargs:
@@ -70,8 +74,9 @@ class DBManager:
         if isinstance(data, str):
             try:
                 data = bytes.fromhex(data)
+                print(data)
             except ValueError:
-                print("Error: Invalid hex string")
+                print(f"Error: Invalid hex string, data: {data}")
                 return False
         
         if len(data) != 20:
@@ -80,7 +85,7 @@ class DBManager:
 
         try:
             ID = struct.unpack(">I", data[0:4])[0]
-            timestamp = struct.unpack(">Q", data[4:12])[0]
+            timestamp = struct.unpack(">Q", data[4:12])[0]  #If the timestamp is not recent, the message will not be added to the db
             segmentData = []    # List of payload bytes like in the documentation [1, 2, 3, 4, 5, 6, 7, 8]
 
             for i in range(12, 20):
@@ -88,29 +93,29 @@ class DBManager:
 
             if(ID == ECU_ID_MSG1):
                 self.writePoint("ECU",
-                                timestamp,
+                                # timestamp,
                                 RPM=segmentData[1]*256+segmentData[0], 
                                 Current=(segmentData[3]*256+segmentData[2])/10,
                                 Voltage=(segmentData[5]*256+segmentData[4])/10,
                                 tag_ErrorCode=data[18:20].hex().upper()
                                 )
-                print("Datos guardados correctamente")
+                print("MSG ECU 1 OK")
             elif(ID == ECU_ID_MSG2):
                 self.writePoint("ECU", 
-                                timestamp,
+                                # timestamp,
                                 Threottle=segmentData[0],
                                 ControllerTemp=segmentData[1] - 40,
                                 MotorTemp=segmentData[2] - 30,
                                 StatusController=segmentData[4],
                                 SwitchSignals=segmentData[5],
                                 )
-                print("Datos guardados correctamente 2")
+                print("MSG ECU 2 OK")
             else:
-                print("Error: ID incorrecto")
+                print("Error: Incorrect ID")
                 return False
             return True
         
         except Exception as e:
-            print(f"Error al guardar los datos en la base de datos: {e}\nEl formato de data es: {data}")
+            print(f"Error message not saved, error_code: {e}\nData forat is: {data}")
             return False
 

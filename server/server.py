@@ -23,7 +23,7 @@ def testClient():
 
 def message_handling(client, userdata, msg):
     print(f"{msg.topic}: {msg.payload.decode()}")
-    #db.saveCANData(msg.payload)
+    db.saveCANData(f"{msg.payload.decode()}")
 
 # Create a new thread to test the client
 #hilo = threading.Thread(target=testClient)
@@ -31,13 +31,13 @@ def message_handling(client, userdata, msg):
 
 #DB TEST
 #Message 1 ECU         ID           TIMESTAMP           PAYLOAD
-data=bytes.fromhex("0CF11E05"+"00000195e0fdc5ee"+"05000000C3010000")
-db.saveCANData(data)
+# data=bytes.fromhex("0CF11E05"+"00000195e0fdc5ee"+"05000000C3010000")
+# db.saveCANData(data)
 
 
 #Message 2 ECU         ID           TIMESTAMP           PAYLOAD
-data=bytes.fromhex("0CF11F05"+"00000195e2c8c5ee"+"2B41330001200000")
-db.saveCANData(data)
+# data=bytes.fromhex("0CF11F05"+"00000195e2c8c5ee"+"2B41330001200000")
+# db.saveCANData(data)
 
 
 # Subscriber listening to the connections
