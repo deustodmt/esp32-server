@@ -1,121 +1,152 @@
 import struct
-import influxdb_client, os
+import influxdb_client
+import os
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-ECU_ID_MSG1 = 0x0CF11E05    # ID del mensaje 1 del ECU
-ECU_ID_MSG2 = 0x0CF11F05    # ID del mensaje 2 del ECU
+# ── Known ECU message IDs ────────────────────────────────────────────────────
+ECU_ID_MSG1 = 0x0CF11E05    # RPM, Current, Voltage, ErrorCode
+ECU_ID_MSG2 = 0x0CF11F05    # Throttle, Temps, Status, Switches
+
 
 class DBManager:
     def __init__(self, bucket):
         self.bucket = bucket
-        self.org = os.getenv("INFLUXDB_ORG", "deusto")
-        self.token = os.getenv("INFLUXDB_TOKEN", "udmt_super_secure_token")
-        self.url = os.getenv("INFLUXDB_URL", "http://db:8086")
-        print(ECU_ID_MSG1.to_bytes(4, byteorder='big')[0:3])
+        self.org = os.getenv("INFLUXDB_ORG",   "deusto")
+        self.token = os.getenv("INFLUXDB_TOKEN",  "udmt_super_secure_token")
+        self.url = os.getenv("INFLUXDB_URL",    "http://db:8086")
         try:
-            self.client = influxdb_client.InfluxDBClient(url=self.url, token=self.token, org=self.org)
+            self.client = influxdb_client.InfluxDBClient(
+                url=self.url, token=self.token, org=self.org)
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
         except Exception as e:
             print(f"Error al conectar con InfluxDB: {e}")
             self.client = None
             self.write_api = None
-    
-    def writeTest(self):
-        try:
-            p = influxdb_client.Point("my_measurement").tag("location", "Prague").field("temperature", 25.3)
-            self.write_api.write(bucket = self.bucket, org = self.org, record=p)
-        except Exception as e:
-            print(f"Error al crear el punto: {e}")
-            return
-        
-    
-    def writePoint(self, measurement:str, timestamp:int = None,**kwargs):
+
+    # ── Low-level write helper ───────────────────────────────────────────────
+    def writePoint(self, measurement: str, timestamp: int = None, **kwargs):
         """
-        Writes a point to the InfluxDB database
-        The format is as follows:
-        Measurement: <measurement>
-        Tag: tag_<tag_name> = <tag_value> // The tag_ will be removed when writing the tag
-        Field: <field_name> = <field_value>
+        Writes a point to InfluxDB.
+        kwargs prefixed with 'tag_' are stored as tags (prefix stripped).
+        All other kwargs are stored as fields.
         """
         try:
             p = influxdb_client.Point(measurement)
-
-            # MotoStudent Bike Signature
             p.tag("Moto", "moto_student_2025")
 
             if timestamp is not None:
-                # if(len(timestamp) != 8 ):
-                #     print(f"Error, timestamp format is not 8 byte: {timestamp}")
-                #     return False
-                # else:
                 p.time(timestamp, write_precision="ms")
 
-            for key in kwargs:
+            for key, val in kwargs.items():
                 if key.startswith("tag_"):
-                    p.tag(key[4:], kwargs[key])
+                    p.tag(key[4:], val)
                 else:
-                    p.field(key, kwargs[key])
-            self.write_api.write(bucket = self.bucket, org = self.org, record=p)
+                    p.field(key, val)
+
+            self.write_api.write(bucket=self.bucket, org=self.org, record=p)
             return True
-        
         except Exception as e:
             print(f"Error al crear el punto: {e}")
             return False
-        
+
+    # ── Main entry point ─────────────────────────────────────────────────────
     def saveCANData(self, data):
         """
-        Decodifies the CAN data and saves it to the database
-        Format of the data (20 bytes):
-        0-3: ID
-        4-11: Timestamp
-        12-19: Data
+        Decodes a CAN frame and writes it to InfluxDB.
+
+        Expected wire format (20 bytes, transmitted as a 40-char hex string):
+          Bytes  0- 3 : CAN ID        (uint32, big-endian)
+          Bytes  4-11 : timestamp_ms  (uint64, big-endian)
+                        upper 4 bytes are 0; lower 4 bytes = ESP32 millis()
+          Bytes 12-19 : payload       (8 bytes, zero-padded to full length)
+
+        This matches the packForServer() output in the ESP32 can-monitor firmware.
         """
 
+        # ── Accept hex string or raw bytes ───────────────────────────────────
         if isinstance(data, str):
+            data = data.strip()
             try:
                 data = bytes.fromhex(data)
-                print(data)
             except ValueError:
-                print(f"Error: Invalid hex string, data: {data}")
+                print(f"Error: cadena hex inválida — '{data}'")
                 return False
-        
+
         if len(data) != 20:
-            print(f"Error: Invalid data length ({len(data)} bytes). Expected 20 bytes.")
+            print(f"Error: longitud inválida ({
+                  len(data)} bytes). Se esperaban 20.")
             return False
 
         try:
-            ID = struct.unpack(">I", data[0:4])[0]
-            timestamp = struct.unpack(">Q", data[4:12])[0]  #If the timestamp is not recent, the message will not be added to the db
-            segmentData = []    # List of payload bytes like in the documentation [1, 2, 3, 4, 5, 6, 7, 8]
+            can_id = struct.unpack(">I", data[0:4])[0]
+            timestamp = struct.unpack(">Q", data[4:12])[
+                0]   # ms since ESP32 boot
+            payload = list(data[12:20])                    # 8 decoded bytes
 
-            for i in range(12, 20):
-                segmentData.append(struct.unpack(">B", data[i:i+1])[0])
+            print(f"CAN  ID=0x{can_id:08X}  ts={timestamp}ms  payload={
+                  [f'{b:02X}' for b in payload]}")
 
-            if(ID == ECU_ID_MSG1):
-                self.writePoint("ECU",
-                                # timestamp,
-                                RPM=segmentData[1]*256+segmentData[0], 
-                                Current=(segmentData[3]*256+segmentData[2])/10,
-                                Voltage=(segmentData[5]*256+segmentData[4])/10,
-                                tag_ErrorCode=data[18:20].hex().upper()
-                                )
-                print("MSG ECU 1 OK")
-            elif(ID == ECU_ID_MSG2):
-                self.writePoint("ECU", 
-                                # timestamp,
-                                Threottle=segmentData[0],
-                                ControllerTemp=segmentData[1] - 40,
-                                MotorTemp=segmentData[2] - 30,
-                                StatusController=segmentData[4],
-                                SwitchSignals=segmentData[5],
-                                )
-                print("MSG ECU 2 OK")
+            # ── Dispatch by CAN ID ───────────────────────────────────────────
+            if can_id == ECU_ID_MSG1:
+                return self._handle_ecu_msg1(payload, timestamp)
+
+            elif can_id == ECU_ID_MSG2:
+                return self._handle_ecu_msg2(payload, timestamp)
+
             else:
-                print("Error: Incorrect ID")
-                return False
-            return True
-        
+                # [MODIFIED] Generic handler — stores raw payload for any unknown ID.
+                # Add specific decoders above (like _handle_ecu_msg1) as needed.
+                return self._handle_generic(can_id, payload, timestamp)
+
         except Exception as e:
-            print(f"Error message not saved, error_code: {e}\nData forat is: {data}")
+            print(f"Error procesando trama: {e}  data={data.hex().upper()}")
             return False
 
+    # ── Per-ID decoders ──────────────────────────────────────────────────────
+
+    def _handle_ecu_msg1(self, payload, timestamp):
+        """ECU message 1: RPM, Current, Voltage, ErrorCode."""
+        result = self.writePoint(
+            "ECU",
+            # timestamp,                          # uncomment to use ESP32 time
+            RPM=payload[1] * 256 + payload[0],
+            Current=(payload[3] * 256 + payload[2]) / 10,
+            Voltage=(payload[5] * 256 + payload[4]) / 10,
+            tag_ErrorCode=f"{payload[6]:02X}{payload[7]:02X}",
+        )
+        if result:
+            print("MSG ECU 1 OK")
+        return result
+
+    def _handle_ecu_msg2(self, payload, timestamp):
+        """ECU message 2: Throttle, temperatures, status flags."""
+        result = self.writePoint(
+            "ECU",
+            # timestamp,
+            Throttle=payload[0],
+            ControllerTemp=payload[1] - 40,
+            MotorTemp=payload[2] - 30,
+            StatusController=payload[4],
+            SwitchSignals=payload[5],
+        )
+        if result:
+            print("MSG ECU 2 OK")
+        return result
+
+    def _handle_generic(self, can_id, payload, timestamp):
+        """
+        [ADDED] Fallback handler for CAN IDs not yet mapped to a specific decoder.
+        Stores the raw payload bytes as individual fields (byte0..byte7) under
+        the measurement 'CAN_raw', tagged with the frame ID.
+        Add a dedicated _handle_* method above when you know the signal layout.
+        """
+        fields = {f"byte{i}": payload[i] for i in range(8)}
+        result = self.writePoint(
+            "CAN_raw",
+            # timestamp,
+            tag_can_id=f"0x{can_id:08X}",
+            **fields,
+        )
+        if result:
+            print(f"MSG GENERIC 0x{can_id:08X} OK")
+        return result
