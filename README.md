@@ -1,79 +1,139 @@
-# 📌 Proyecto: Integración de ESP32, Mosquitto e InfluxDB
+# esp32-server
 
-## 📝 Descripción
-Este proyecto tiene como objetivo la integración de una **ESP32**, un **servidor Mosquitto (MQTT)** y **InfluxDB** para el almacenamiento y visualización de datos provenientes del **bus CAN de una moto eléctrica**.
+Stack de servidor para recibir, decodificar y almacenar telemetría CAN enviada por el firmware **esp32-can-monitor** a través de MQTT.
 
-La ESP32 actúa como **nodo de adquisición**, recibiendo tramas CAN de diferentes componentes, como la ECU y el BMS. Estas tramas se envían mediante **MQTT** a un servidor Mosquitto y posteriormente se almacenan en InfluxDB mediante un cliente Python. La información es procesada y organizada en **measurements** dentro de un **bucket** en InfluxDB.
+## Descripción general
 
-Para la visualización de los datos, utilizamos **Grafana**, donde se diseñarán dashboards personalizados para analizar el estado del vehículo en tiempo real.
+El sistema consta de tres servicios Docker orquestados con Compose:
 
-Este sistema permite un **monitoreo eficiente**, asegurando la persistencia y accesibilidad de los datos con una estructura optimizada para su análisis.
+- **Mosquitto** — broker MQTT que recibe los mensajes del ESP32
+- **esp32-server** — servicio Python que suscribe el topic MQTT, decodifica las tramas CAN y las escribe en InfluxDB
+- **InfluxDB** — base de datos de series temporales donde se almacenan los datos
 
-## 🚀 Planificación
+## Arquitectura
 
-### 1️⃣ Conexión y almacenamiento de datos
-- Configurar la ESP32 para enviar datos a Mosquitto por WiFi.
-- Configurar Mosquitto para que escuche en la interfaz `wlan`.
-- Implementar el cliente de Python para almacenar datos en InfluxDB.
-- Asegurar la persistencia y correcto almacenamiento de datos en la base de datos.
-
-### 2️⃣ Extracción y procesamiento de tramas CAN
-- Implementar `switch-case` para extraer información de las tramas.
-- Validar el formato de las tramas para evitar errores en el almacenamiento.
-
-📐 **Formato de la trama CAN almacenada en InfluxDB**:
-```plaintext
-ID (4 bytes)      TIMESTAMP (8 bytes)      PAYLOAD (8 bytes)
-"0CF11E05"  +  "00000195e0fdc5ee"  +  "05000000C3010000"
 ```
-- **ID**: Identifica el dispositivo y tipo de mensaje.
-- **TIMESTAMP**: Reemplazado por el timestamp actual al insertarse en InfluxDB.
-- **PAYLOAD**: Datos a procesar según el tipo de componente.
-
-⚠️ **Cualquier error de formato hará que el mensaje sea descartado.**
-
-## 🗄️ Base de datos
-Usamos **InfluxDB** como base de datos NoSQL para almacenar tramas del protocolo CAN de la moto. Las tramas llegan por MQTT y se insertan mediante un cliente de Python.
-
-📐 **Estructura del bucket `udmt` en InfluxDB:**
-```plaintext
-Bucket (udmt):
-    ├── Measurement (ECU):
-    │   ├── Point: Definir tramas de la ECU
-    ├── Measurement (BMS):
-    │   ├── Point: Definir tramas de la BMS
-```
-📌 **Ejemplo de `Point` en la medida `ECU`**:
-```plaintext
-Measurement: ECU
-    ├── Point: rpm=3200, temperatura_motor=90, timestamp=1711190400000
-    ├── Point: voltaje=395, corriente=52, estado=OK, timestamp=1711190410000
+ESP32 (firmware)
+    │  MQTT (topic: test_topic)
+    ▼
+Mosquitto :2000 (externo) / :1883 (interno Docker)
+    │  MQTT (topic: test_topic)
+    ▼
+esp32-server (Python)
+    │  InfluxDB client
+    ▼
+InfluxDB :8086
+    │
+    ▼
+Grafana / consultas externas
 ```
 
-📍 **Recursos para la extracción de datos:**
-- **ECU**: [Protocolo CAN de Kelly Controller](https://media.kellycontroller.com/new/Sinusoidal-Wave-Controller-KLS-D-8080I-8080IPS-Broadcast-CAN-Protocol.pdf)
-- **BMS**: [Protocolo CAN de Daly](https://robu.in/wp-content/uploads/2021/10/Daly-CAN-Communications-Protocol-V1.0-1.pdf)
-- **Ejemplo de trama ECU:**
-```plaintext
-2B 41 33 00 01 20 00 00
-05 00 00 00 C3 01 00 00
+## Requisitos
+
+- Docker y Docker Compose
+
+## Puesta en marcha
+
+```bash
+docker compose up --build
 ```
 
-## 📊 Visualización de datos con Grafana
-Para visualizar los datos utilizaremos **Grafana**, implementado mediante **Docker Compose** para facilitar su configuración.
+Los servicios arrancan en orden: primero Mosquitto y InfluxDB (con healthchecks), y solo cuando están listos arranca el servidor Python.
 
-📌 **Pasos para la implementación:**
-1. Descargar e instalar **Grafana** mediante Docker Compose.
-2. Conectar Grafana con el contenedor de **InfluxDB v2**.
-3. Diseñar un **dashboard** para la visualización de datos.
+## Servicios y puertos
 
-## ⚠️ Tareas pendientes
-- Asegurar la conexión entre InfluxDB y Grafana.
-- Elaborar el Dashboard en Grafana.
-- Revisar el tiempo mínimo de vida de las tramas en InfluxDB, ya que si son un poco viejas, no las registra correctamente.
+| Servicio | Puerto externo | Puerto interno | Descripción |
+|---|---|---|---|
+| Mosquitto | 2000 | 1883 | Broker MQTT. El ESP32 conecta al puerto 2000 |
+| InfluxDB | 8086 | 8086 | Base de datos. UI web accesible en `http://localhost:8086` |
 
-✏️ **Notas finales:**
-- Se debe asegurar que InfluxDB y Mosquitto estén correctamente configurados para garantizar la persistencia y transmisión de los datos.
-- La implementación de la interfaz puede ser opcional si Grafana cumple con las necesidades del proyecto.
+## Configuración InfluxDB
 
+| Parámetro | Valor por defecto |
+|---|---|
+| Organización | `deusto` |
+| Bucket | `udmt` |
+| Usuario admin | `admin` / `adminadmin` |
+| Token | `udmt_super_secure_token` |
 
+Los datos persistentes de InfluxDB se guardan en `./db/data/`.
+
+## Formato de mensajes esperado
+
+El servidor recibe strings hexadecimales de 40 caracteres (= 20 bytes) publicados por el ESP32 en el topic `test_topic`. El layout es:
+
+```
+Bytes  0- 3: CAN ID      (uint32, big-endian)
+Bytes  4-11: timestamp   (uint64, big-endian, millis desde arranque ESP32)
+Bytes 12-19: payload CAN (8 bytes, zero-padded)
+```
+
+Este formato es el generado por `packForServer()` en el firmware esp32-can-monitor.
+
+## Decodificación de tramas CAN (`server/db_manager.py`)
+
+El servidor reconoce los siguientes CAN IDs específicos de la ECU:
+
+### `0x0CF11E05` — ECU Mensaje 1
+
+| Campo | Bytes payload | Decodificación | Unidad |
+|---|---|---|---|
+| RPM | 0-1 | `byte[1]*256 + byte[0]` | rpm |
+| Current | 2-3 | `(byte[3]*256 + byte[2]) / 10` | A |
+| Voltage | 4-5 | `(byte[5]*256 + byte[4]) / 10` | V |
+| ErrorCode | 6-7 | hex string (tag InfluxDB) | — |
+
+Measurement InfluxDB: `ECU`
+
+### `0x0CF11F05` — ECU Mensaje 2
+
+| Campo | Byte payload | Decodificación | Unidad |
+|---|---|---|---|
+| Throttle | 0 | valor directo | % |
+| ControllerTemp | 1 | `byte - 40` | °C |
+| MotorTemp | 2 | `byte - 30` | °C |
+| StatusController | 4 | valor directo | — |
+| SwitchSignals | 5 | valor directo | — |
+
+Measurement InfluxDB: `ECU`
+
+### IDs desconocidos — handler genérico
+
+Cualquier trama con un CAN ID no reconocido se almacena con los 8 bytes del payload como campos individuales (`byte0`..`byte7`) bajo el measurement `CAN_raw`, con el ID como tag (`can_id`).
+
+Para añadir soporte a nuevos IDs, crear un método `_handle_ecu_msgX()` en `db_manager.py` y añadir el CAN ID correspondiente al bloque de dispatch en `saveCANData()`.
+
+## Variables de entorno (`server/db_manager.py`)
+
+El servidor Python lee la configuración de InfluxDB desde las siguientes variables de entorno (con valores por defecto):
+
+| Variable | Por defecto |
+|---|---|
+| `INFLUXDB_ORG` | `deusto` |
+| `INFLUXDB_TOKEN` | `udmt_super_secure_token` |
+| `INFLUXDB_URL` | `http://db:8086` |
+
+## Mosquitto
+
+La configuración mínima en `mosquitto/config/mosquitto.conf` habilita acceso anónimo. El ESP32 envía credenciales (`admin`/`admin`) por compatibilidad, pero no son verificadas.
+
+## Estructura de archivos
+
+```
+esp32-server/
+├── compose.yaml              # Orquestación Docker Compose
+├── mosquitto/
+│   └── config/
+│       └── mosquitto.conf    # Configuración del broker MQTT
+├── server/
+│   ├── Dockerfile
+│   ├── requirements.txt      # paho-mqtt, influxdb-client
+│   ├── server.py             # Punto de entrada: suscripción MQTT
+│   └── db_manager.py         # Decodificación CAN + escritura InfluxDB
+└── db/
+    └── data/                 # Datos persistentes de InfluxDB (volumen)
+```
+
+## Relación con esp32-can-monitor
+
+Este servidor recibe los mensajes publicados por el firmware del ESP32. Ver el repositorio [esp32-can-monitor](../esp32-can-monitor) para detalles del firmware y el formato binario de las tramas.
