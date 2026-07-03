@@ -55,6 +55,8 @@ The repository includes a small local simulator for publishing sample frames wit
 
 The simulator publishes the 40-character hex string, not raw binary bytes, to match the current `server.py` behavior.
 
+The server reads `MQTT_HOST`, `MQTT_PORT`, `MQTT_TOPIC`, and optional `MQTT_CLIENT_ID` from the environment. Defaults are `mosquitto`, `1883`, `test_topic`, and an empty client ID. If `MQTT_TOPIC` changes, pass the same topic to the simulator with `--topic`.
+
 Start the Docker stack first:
 
 ```powershell
