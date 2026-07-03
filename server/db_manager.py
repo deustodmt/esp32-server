@@ -1,6 +1,6 @@
-import struct
 import influxdb_client
 import os
+from can_frame import CANFrame
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 # ── Known ECU message IDs ────────────────────────────────────────────────────
@@ -63,25 +63,11 @@ class DBManager:
         This matches the packForServer() output in the ESP32 can-monitor firmware.
         """
 
-        # ── Accept hex string or raw bytes ───────────────────────────────────
-        if isinstance(data, str):
-            data = data.strip()
-            try:
-                data = bytes.fromhex(data)
-            except ValueError:
-                print(f"Error: cadena hex inválida — '{data}'")
-                return False
-
-        if len(data) != 20:
-            print(f"Error: longitud inválida ({
-                  len(data)} bytes). Se esperaban 20.")
-            return False
-
         try:
-            can_id = struct.unpack(">I", data[0:4])[0]
-            timestamp = struct.unpack(">Q", data[4:12])[
-                0]   # ms since ESP32 boot
-            payload = list(data[12:20])                    # 8 decoded bytes
+            frame = CANFrame.from_current_mqtt_payload(data)
+            can_id = frame.can_id
+            timestamp = frame.timestamp
+            payload = list(frame.data)                    # 8 decoded bytes
 
             print(f"CAN  ID=0x{can_id:08X}  ts={timestamp}ms  payload={
                   [f'{b:02X}' for b in payload]}")
@@ -99,7 +85,9 @@ class DBManager:
                 return self._handle_generic(can_id, payload, timestamp)
 
         except Exception as e:
-            print(f"Error procesando trama: {e}  data={data.hex().upper()}")
+            raw_data = data.hex().upper() if isinstance(
+                data, (bytes, bytearray)) else str(data)
+            print(f"Error procesando trama: {e}  data={raw_data}")
             return False
 
     # ── Per-ID decoders ──────────────────────────────────────────────────────
