@@ -1,139 +1,159 @@
 # esp32-server
 
-Stack de servidor para recibir, decodificar y almacenar telemetría CAN enviada por el firmware **esp32-can-monitor** a través de MQTT.
+Servidor de preparacion para la telemetria CAN de Deusto Moto Team / MotoStudent Electric.
 
-## Descripción general
+El stack actual recibe mensajes publicados por una ESP32 mediante MQTT, procesa tramas CAN en Python y guarda los datos en InfluxDB. Este repositorio todavia esta en fase base: el objetivo es ir hacia una ingesta CAN robusta, simulacion, tests y dashboards, manteniendo cambios pequenos y revisables.
 
-El sistema consta de tres servicios Docker orquestados con Compose:
+> Este proyecto no debe considerarse todavia telemetria en vivo lista para uso en pista.
 
-- **Mosquitto** — broker MQTT que recibe los mensajes del ESP32
-- **esp32-server** — servicio Python que suscribe el topic MQTT, decodifica las tramas CAN y las escribe en InfluxDB
-- **InfluxDB** — base de datos de series temporales donde se almacenan los datos
+## Arquitectura actual
 
-## Arquitectura
+El entorno se levanta con Docker Compose y contiene tres servicios:
 
+| Servicio | Funcion |
+| --- | --- |
+| `mosquitto` | Broker MQTT que recibe mensajes desde la ESP32. |
+| `esp32-server` | Servicio Python que se suscribe al topic MQTT y pasa payloads CAN a `DBManager`. |
+| `db` | InfluxDB 2.x para almacenar datos de series temporales. |
+
+Flujo esperado:
+
+```text
+ESP32 firmware
+  -> MQTT topic test_topic
+  -> Mosquitto
+  -> esp32-server Python
+  -> InfluxDB bucket
 ```
-ESP32 (firmware)
-    │  MQTT (topic: test_topic)
-    ▼
-Mosquitto :2000 (externo) / :1883 (interno Docker)
-    │  MQTT (topic: test_topic)
-    ▼
-esp32-server (Python)
-    │  InfluxDB client
-    ▼
-InfluxDB :8086
-    │
-    ▼
-Grafana / consultas externas
+
+## Estructura
+
+```text
+esp32-server/
+|-- AGENTS.md
+|-- README.md
+|-- compose.yaml
+|-- .env.example
+|-- mosquitto/
+|   `-- config/
+|       `-- mosquitto.conf
+`-- server/
+    |-- Dockerfile
+    |-- requirements.txt
+    |-- server.py
+    `-- db_manager.py
 ```
 
 ## Requisitos
 
-- Docker y Docker Compose
+- Docker
+- Docker Compose
+- Python 3, solo para comprobaciones locales opcionales
+
+## Configuracion
+
+1. Copia el archivo de ejemplo:
+
+```bash
+cp .env.example .env
+```
+
+En PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Edita `.env` y cambia los placeholders locales:
+
+```dotenv
+INFLUXDB_PASSWORD=change-me-local-password
+INFLUXDB_TOKEN=change-me-local-token
+```
+
+No subas `.env` al repositorio. El archivo `.env.example` solo contiene valores de ejemplo.
+
+Variables principales:
+
+| Variable | Uso |
+| --- | --- |
+| `MOSQUITTO_EXTERNAL_PORT` | Puerto expuesto en la maquina host para MQTT. |
+| `MOSQUITTO_INTERNAL_PORT` | Puerto interno del contenedor Mosquitto. |
+| `INFLUXDB_EXTERNAL_PORT` | Puerto expuesto para la UI/API de InfluxDB. |
+| `INFLUXDB_INTERNAL_PORT` | Puerto interno del contenedor InfluxDB. |
+| `INFLUXDB_USERNAME` | Usuario inicial de InfluxDB. |
+| `INFLUXDB_PASSWORD` | Password inicial de InfluxDB. |
+| `INFLUXDB_ORG` | Organizacion de InfluxDB. |
+| `INFLUXDB_BUCKET` | Bucket usado por InfluxDB y el servidor Python. |
+| `INFLUXDB_TOKEN` | Token local para escribir en InfluxDB. |
+| `INFLUXDB_URL` | URL que usa el servidor Python para conectar con InfluxDB. |
 
 ## Puesta en marcha
+
+Con `.env` creado:
 
 ```bash
 docker compose up --build
 ```
 
-Los servicios arrancan en orden: primero Mosquitto y InfluxDB (con healthchecks), y solo cuando están listos arranca el servidor Python.
+Servicios expuestos por defecto:
 
-## Servicios y puertos
+| Servicio | URL/Puerto |
+| --- | --- |
+| Mosquitto | `localhost:2000` |
+| InfluxDB | `http://localhost:8086` |
 
-| Servicio | Puerto externo | Puerto interno | Descripción |
-|---|---|---|---|
-| Mosquitto | 2000 | 1883 | Broker MQTT. El ESP32 conecta al puerto 2000 |
-| InfluxDB | 8086 | 8086 | Base de datos. UI web accesible en `http://localhost:8086` |
+El servicio Python se ejecuta dentro de Docker con:
 
-## Configuración InfluxDB
-
-| Parámetro | Valor por defecto |
-|---|---|
-| Organización | `deusto` |
-| Bucket | `udmt` |
-| Usuario admin | `admin` / `adminadmin` |
-| Token | `udmt_super_secure_token` |
-
-Los datos persistentes de InfluxDB se guardan en `./db/data/`.
+```bash
+python3 -u server.py
+```
 
 ## Formato de mensajes esperado
 
-El servidor recibe strings hexadecimales de 40 caracteres (= 20 bytes) publicados por el ESP32 en el topic `test_topic`. El layout es:
+El servidor espera strings hexadecimales de 40 caracteres, equivalentes a 20 bytes:
 
-```
-Bytes  0- 3: CAN ID      (uint32, big-endian)
-Bytes  4-11: timestamp   (uint64, big-endian, millis desde arranque ESP32)
-Bytes 12-19: payload CAN (8 bytes, zero-padded)
-```
-
-Este formato es el generado por `packForServer()` en el firmware esp32-can-monitor.
-
-## Decodificación de tramas CAN (`server/db_manager.py`)
-
-El servidor reconoce los siguientes CAN IDs específicos de la ECU:
-
-### `0x0CF11E05` — ECU Mensaje 1
-
-| Campo | Bytes payload | Decodificación | Unidad |
-|---|---|---|---|
-| RPM | 0-1 | `byte[1]*256 + byte[0]` | rpm |
-| Current | 2-3 | `(byte[3]*256 + byte[2]) / 10` | A |
-| Voltage | 4-5 | `(byte[5]*256 + byte[4]) / 10` | V |
-| ErrorCode | 6-7 | hex string (tag InfluxDB) | — |
-
-Measurement InfluxDB: `ECU`
-
-### `0x0CF11F05` — ECU Mensaje 2
-
-| Campo | Byte payload | Decodificación | Unidad |
-|---|---|---|---|
-| Throttle | 0 | valor directo | % |
-| ControllerTemp | 1 | `byte - 40` | °C |
-| MotorTemp | 2 | `byte - 30` | °C |
-| StatusController | 4 | valor directo | — |
-| SwitchSignals | 5 | valor directo | — |
-
-Measurement InfluxDB: `ECU`
-
-### IDs desconocidos — handler genérico
-
-Cualquier trama con un CAN ID no reconocido se almacena con los 8 bytes del payload como campos individuales (`byte0`..`byte7`) bajo el measurement `CAN_raw`, con el ID como tag (`can_id`).
-
-Para añadir soporte a nuevos IDs, crear un método `_handle_ecu_msgX()` en `db_manager.py` y añadir el CAN ID correspondiente al bloque de dispatch en `saveCANData()`.
-
-## Variables de entorno (`server/db_manager.py`)
-
-El servidor Python lee la configuración de InfluxDB desde las siguientes variables de entorno (con valores por defecto):
-
-| Variable | Por defecto |
-|---|---|
-| `INFLUXDB_ORG` | `deusto` |
-| `INFLUXDB_TOKEN` | `udmt_super_secure_token` |
-| `INFLUXDB_URL` | `http://db:8086` |
-
-## Mosquitto
-
-La configuración mínima en `mosquitto/config/mosquitto.conf` habilita acceso anónimo. El ESP32 envía credenciales (`admin`/`admin`) por compatibilidad, pero no son verificadas.
-
-## Estructura de archivos
-
-```
-esp32-server/
-├── compose.yaml              # Orquestación Docker Compose
-├── mosquitto/
-│   └── config/
-│       └── mosquitto.conf    # Configuración del broker MQTT
-├── server/
-│   ├── Dockerfile
-│   ├── requirements.txt      # paho-mqtt, influxdb-client
-│   ├── server.py             # Punto de entrada: suscripción MQTT
-│   └── db_manager.py         # Decodificación CAN + escritura InfluxDB
-└── db/
-    └── data/                 # Datos persistentes de InfluxDB (volumen)
+```text
+Bytes  0-3   CAN ID      uint32 big-endian
+Bytes  4-11  timestamp   uint64 big-endian, ms desde arranque ESP32
+Bytes 12-19  payload CAN 8 bytes
 ```
 
-## Relación con esp32-can-monitor
+El topic MQTT usado actualmente por `server.py` es `test_topic`.
 
-Este servidor recibe los mensajes publicados por el firmware del ESP32. Ver el repositorio [esp32-can-monitor](../esp32-can-monitor) para detalles del firmware y el formato binario de las tramas.
+## Comprobaciones basicas
+
+Validar sintaxis Python:
+
+```bash
+python -m py_compile server/server.py server/db_manager.py
+```
+
+Validar la configuracion de Compose, con `.env` presente:
+
+```bash
+docker compose config
+```
+
+Levantar el stack:
+
+```bash
+docker compose up --build
+```
+
+## Estado actual y siguientes pasos
+
+Estado actual:
+
+- MQTT conectado mediante Mosquitto.
+- Decodificacion CAN basica en `server/db_manager.py`.
+- Escritura en InfluxDB mediante `influxdb-client`.
+- Configuracion local externalizada a `.env`.
+
+Trabajo pendiente recomendado:
+
+- Anadir tests unitarios para decodificacion CAN.
+- Anadir simulador local de mensajes MQTT/CAN.
+- Definir convenciones de measurements, tags y campos en InfluxDB.
+- Preparar dashboards una vez estabilizado el modelo de datos.
+- Revisar configuracion MQTT para entornos no locales.

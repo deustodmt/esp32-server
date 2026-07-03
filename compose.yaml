@@ -1,39 +1,43 @@
 services:
   mosquitto:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2.0
     ports:
-      - "2000:1883"
+      - "${MOSQUITTO_EXTERNAL_PORT:?Set MOSQUITTO_EXTERNAL_PORT in .env}:${MOSQUITTO_INTERNAL_PORT:?Set MOSQUITTO_INTERNAL_PORT in .env}"
     volumes:
       - ./mosquitto/config:/mosquitto/config
-    # compose.yaml — replace the mosquitto healthcheck block
     healthcheck:
-      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "1883", "-t", "healthcheck", "-m", "ping", "--quiet"]
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "${MOSQUITTO_INTERNAL_PORT}", "-t", "healthcheck", "-m", "ping", "--quiet"]
       interval: 5s
       timeout: 3s
       retries: 3
       start_period: 5s
-  
+
   esp32-server:
     build: ./server
+    environment:
+      - INFLUXDB_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:?Set INFLUXDB_TOKEN in .env}
+      - INFLUXDB_URL=${INFLUXDB_URL:?Set INFLUXDB_URL in .env}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
     depends_on:
       mosquitto:
         condition: service_healthy
       db:
         condition: service_healthy
-  
+
   db:
-    image: influxdb:latest
+    image: influxdb:2.7
     ports:
-      - "8086:8086"
+      - "${INFLUXDB_EXTERNAL_PORT:?Set INFLUXDB_EXTERNAL_PORT in .env}:${INFLUXDB_INTERNAL_PORT:?Set INFLUXDB_INTERNAL_PORT in .env}"
     volumes:
       - ./db/data:/var/lib/influxdb2
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
-      - DOCKER_INFLUXDB_INIT_ORG=deusto
-      - DOCKER_INFLUXDB_INIT_BUCKET=udmt
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=udmt_super_secure_token
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:?Set INFLUXDB_USERNAME in .env}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:?Set INFLUXDB_PASSWORD in .env}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:?Set INFLUXDB_TOKEN in .env}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8086/health"]
       interval: 10s
