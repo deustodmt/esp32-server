@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 CAN_CLASSIC_MAX_ID = 0x7FF
 CAN_EXTENDED_MAX_ID = 0x1FFFFFFF
+UINT64_MAX = 0xFFFFFFFFFFFFFFFF
 CURRENT_MQTT_FRAME_LENGTH_BYTES = 20
 CURRENT_MQTT_PAYLOAD_DLC = 8
 
@@ -20,6 +21,8 @@ class CANFrame:
             raise TypeError("timestamp must be an integer")
         if self.timestamp < 0:
             raise ValueError("timestamp must be non-negative")
+        if self.timestamp > UINT64_MAX:
+            raise ValueError("timestamp must fit in an unsigned 64-bit integer")
 
         if isinstance(self.can_id, bool) or not isinstance(self.can_id, int):
             raise TypeError("can_id must be an integer")
@@ -65,6 +68,23 @@ class CANFrame:
             data=data,
             source=source,
         )
+
+    def to_current_mqtt_payload_bytes(self) -> bytes:
+        if self.dlc != CURRENT_MQTT_PAYLOAD_DLC:
+            raise ValueError("current MQTT payload format requires dlc=8")
+
+        return (
+            self.can_id.to_bytes(4, byteorder="big", signed=False)
+            + self.timestamp.to_bytes(8, byteorder="big", signed=False)
+            + bytes(self.data)
+        )
+
+    def to_current_mqtt_payload_hex(self) -> str:
+        return self.to_current_mqtt_payload_bytes().hex().upper()
+
+    def to_current_mqtt_payload(self) -> str:
+        """Return the text hex payload that server.py currently expects over MQTT."""
+        return self.to_current_mqtt_payload_hex()
 
 
 def _coerce_current_mqtt_payload(payload: str | bytes | bytearray) -> bytes:
