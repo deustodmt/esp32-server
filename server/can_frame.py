@@ -16,17 +16,17 @@ class CANFrame:
     source: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.timestamp, int):
+        if isinstance(self.timestamp, bool) or not isinstance(self.timestamp, int):
             raise TypeError("timestamp must be an integer")
         if self.timestamp < 0:
             raise ValueError("timestamp must be non-negative")
 
-        if not isinstance(self.can_id, int):
+        if isinstance(self.can_id, bool) or not isinstance(self.can_id, int):
             raise TypeError("can_id must be an integer")
         if not 0 <= self.can_id <= CAN_EXTENDED_MAX_ID:
             raise ValueError("can_id must be in the CAN classic or extended range")
 
-        if not isinstance(self.dlc, int):
+        if isinstance(self.dlc, bool) or not isinstance(self.dlc, int):
             raise TypeError("dlc must be an integer")
         if not 0 <= self.dlc <= CURRENT_MQTT_PAYLOAD_DLC:
             raise ValueError("dlc must be between 0 and 8 for classic CAN")
@@ -35,7 +35,7 @@ class CANFrame:
         if len(data) != self.dlc:
             raise ValueError("data length must match dlc")
         for byte in data:
-            if not isinstance(byte, int):
+            if isinstance(byte, bool) or not isinstance(byte, int):
                 raise TypeError("data bytes must be integers")
             if not 0 <= byte <= 0xFF:
                 raise ValueError("data bytes must be between 0 and 255")

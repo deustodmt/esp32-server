@@ -39,15 +39,30 @@ def test_timestamp_must_be_non_negative():
         CANFrame(timestamp=-1, can_id=0x123, dlc=0, data=[])
 
 
+def test_timestamp_must_reject_bool():
+    with pytest.raises(TypeError, match="timestamp"):
+        CANFrame(timestamp=True, can_id=0x123, dlc=0, data=[])
+
+
 def test_can_id_must_be_integer():
     with pytest.raises(TypeError, match="can_id"):
         CANFrame(timestamp=0, can_id="0x123", dlc=0, data=[])
+
+
+def test_can_id_must_reject_bool():
+    with pytest.raises(TypeError, match="can_id"):
+        CANFrame(timestamp=0, can_id=True, dlc=0, data=[])
 
 
 @pytest.mark.parametrize("can_id", [-1, CAN_EXTENDED_MAX_ID + 1])
 def test_can_id_must_be_in_valid_can_range(can_id):
     with pytest.raises(ValueError, match="can_id"):
         CANFrame(timestamp=0, can_id=can_id, dlc=0, data=[])
+
+
+def test_dlc_must_reject_bool():
+    with pytest.raises(TypeError, match="dlc"):
+        CANFrame(timestamp=0, can_id=0x123, dlc=True, data=[1])
 
 
 @pytest.mark.parametrize("dlc", [-1, 9])
@@ -65,6 +80,11 @@ def test_data_length_must_match_dlc():
 def test_data_bytes_must_be_byte_values(byte):
     with pytest.raises(ValueError, match="data bytes"):
         CANFrame(timestamp=0, can_id=0x123, dlc=1, data=[byte])
+
+
+def test_data_bytes_must_reject_bool():
+    with pytest.raises(TypeError, match="data bytes"):
+        CANFrame(timestamp=0, can_id=0x123, dlc=1, data=[False])
 
 
 def test_current_mqtt_payload_hex_string_is_parsed():
