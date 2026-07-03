@@ -7,7 +7,7 @@ import pytest
 SERVER_DIR = pathlib.Path(__file__).resolve().parents[1] / "server"
 sys.path.insert(0, str(SERVER_DIR))
 
-from can_frame import CAN_EXTENDED_MAX_ID, CANFrame
+from can_frame import CAN_EXTENDED_MAX_ID, CANFrame, UINT64_MAX
 
 
 def test_can_frame_accepts_valid_classic_frame():
@@ -37,6 +37,11 @@ def test_can_frame_accepts_valid_extended_frame():
 def test_timestamp_must_be_non_negative():
     with pytest.raises(ValueError, match="timestamp"):
         CANFrame(timestamp=-1, can_id=0x123, dlc=0, data=[])
+
+
+def test_timestamp_must_fit_uint64():
+    with pytest.raises(ValueError, match="unsigned 64-bit"):
+        CANFrame(timestamp=UINT64_MAX + 1, can_id=0x123, dlc=0, data=[])
 
 
 def test_timestamp_must_reject_bool():
@@ -109,6 +114,69 @@ def test_current_mqtt_payload_bytes_are_parsed_with_custom_source():
     assert frame.dlc == 8
     assert frame.data == (0x2B, 0x41, 0x33, 0x00, 0x01, 0x20, 0x00, 0x00)
     assert frame.source == "test"
+
+
+def test_current_mqtt_payload_round_trip_preserves_frame_values():
+    frame = CANFrame(
+        timestamp=0x00000195E0FDC5EE,
+        can_id=0x0CF11E05,
+        dlc=8,
+        data=(0x05, 0x00, 0x00, 0x00, 0xC3, 0x01, 0x00, 0x00),
+        source="test",
+    )
+
+    parsed = CANFrame.from_current_mqtt_payload(frame.to_current_mqtt_payload())
+
+    assert parsed.can_id == frame.can_id
+    assert parsed.timestamp == frame.timestamp
+    assert parsed.data == frame.data
+    assert parsed.dlc == frame.dlc
+
+
+def test_current_mqtt_payload_bytes_serialization_round_trip():
+    frame = CANFrame(
+        timestamp=0x00000195E0FDC5EE,
+        can_id=0x0CF11E05,
+        dlc=8,
+        data=(0x05, 0x00, 0x00, 0x00, 0xC3, 0x01, 0x00, 0x00),
+    )
+
+    payload = frame.to_current_mqtt_payload_bytes()
+    parsed = CANFrame.from_current_mqtt_payload(payload)
+
+    assert isinstance(payload, bytes)
+    assert len(payload) == 20
+    assert parsed.can_id == frame.can_id
+    assert parsed.timestamp == frame.timestamp
+    assert parsed.data == frame.data
+    assert parsed.dlc == frame.dlc
+
+
+def test_current_mqtt_payload_hex_serialization_round_trip():
+    frame = CANFrame(
+        timestamp=0x00000195E0FDC5EE,
+        can_id=0x0CF11E05,
+        dlc=8,
+        data=(0x05, 0x00, 0x00, 0x00, 0xC3, 0x01, 0x00, 0x00),
+    )
+
+    payload = frame.to_current_mqtt_payload_hex()
+    parsed = CANFrame.from_current_mqtt_payload(payload)
+
+    assert isinstance(payload, str)
+    assert len(payload) == 40
+    assert payload == payload.upper()
+    assert parsed.can_id == frame.can_id
+    assert parsed.timestamp == frame.timestamp
+    assert parsed.data == frame.data
+    assert parsed.dlc == frame.dlc
+
+
+def test_current_mqtt_payload_serialization_requires_dlc_8():
+    frame = CANFrame(timestamp=1, can_id=0x123, dlc=3, data=(1, 2, 3))
+
+    with pytest.raises(ValueError, match="dlc=8"):
+        frame.to_current_mqtt_payload()
 
 
 def test_current_mqtt_payload_rejects_non_hex_string():
