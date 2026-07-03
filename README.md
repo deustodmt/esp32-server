@@ -87,6 +87,10 @@ Variables principales:
 | `INFLUXDB_BUCKET` | Bucket usado por InfluxDB y el servidor Python. |
 | `INFLUXDB_TOKEN` | Token local para escribir en InfluxDB. |
 | `INFLUXDB_URL` | URL que usa el servidor Python para conectar con InfluxDB. |
+| `MQTT_HOST` | Broker MQTT usado por el servidor Python. Por defecto, `mosquitto` dentro de Docker. |
+| `MQTT_PORT` | Puerto MQTT usado por el servidor Python. Por defecto, `1883`. |
+| `MQTT_TOPIC` | Topic al que se suscribe el servidor Python. Por defecto, `test_topic`. |
+| `MQTT_CLIENT_ID` | Client ID MQTT opcional para el servidor Python. |
 
 ## Puesta en marcha
 
@@ -119,7 +123,7 @@ Bytes  4-11  timestamp   uint64 big-endian, ms desde arranque ESP32
 Bytes 12-19  payload CAN 8 bytes
 ```
 
-El topic MQTT usado actualmente por `server.py` es `test_topic`.
+El topic MQTT usado por defecto por `server.py` es `test_topic`. Si cambias `MQTT_TOPIC`, usa el mismo topic al ejecutar el simulador MQTT/CAN.
 
 ## Comprobaciones basicas
 
