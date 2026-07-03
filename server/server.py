@@ -1,11 +1,12 @@
 import sys
 
 from db_manager import *
+import os
 import paho.mqtt.client as paho
 import threading
 import time
 
-db = DBManager("udmt")
+db = DBManager(os.getenv("INFLUXDB_BUCKET", "udmt"))
 
 def testClient():
     time.sleep(2)

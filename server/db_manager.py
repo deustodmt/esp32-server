@@ -12,7 +12,7 @@ class DBManager:
     def __init__(self, bucket):
         self.bucket = bucket
         self.org = os.getenv("INFLUXDB_ORG",   "deusto")
-        self.token = os.getenv("INFLUXDB_TOKEN",  "udmt_super_secure_token")
+        self.token = os.getenv("INFLUXDB_TOKEN")
         self.url = os.getenv("INFLUXDB_URL",    "http://db:8086")
         try:
             self.client = influxdb_client.InfluxDBClient(
