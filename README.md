@@ -153,6 +153,10 @@ py tools\publish_mqtt_frames.py --host localhost --port 2000 --topic test_topic 
 
 Ver la guia completa en [docs/e2e-smoke-test.md](docs/e2e-smoke-test.md).
 
+## Continuous Integration
+
+GitHub Actions ejecuta `py_compile` y `pytest` automaticamente en cada pull request y en cada push a `main`.
+
 ## Estado actual y siguientes pasos
 
 Estado actual:
