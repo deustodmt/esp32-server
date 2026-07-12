@@ -145,6 +145,14 @@ Levantar el stack:
 docker compose up --build
 ```
 
+Ejecutar una prueba end-to-end local sin ESP32:
+
+```powershell
+py tools\publish_mqtt_frames.py --host localhost --port 2000 --topic test_topic --count 5
+```
+
+Ver la guia completa en [docs/e2e-smoke-test.md](docs/e2e-smoke-test.md).
+
 ## Estado actual y siguientes pasos
 
 Estado actual:
